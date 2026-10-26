@@ -2,7 +2,7 @@ name: Build and release LZ4
 
 on:
   push:
-    branches: [main, 'codex/lz4-release', 'codex/multilingual-installer']
+    branches: [main, 'codex/lz4-release', 'codex/multilingual-installer', 'codex/smart-extract']
     tags: ['v*-lz4*']
   workflow_dispatch:
 
@@ -23,6 +23,8 @@ jobs:
         run: python3 -m pip install lz4
       - name: Test release binary
         run: python3 tests/lz4_smoke.py CPP/7zip/Bundles/Alone2/_o/7zz --reference
+      - name: Test smart layout and compressed TAR extraction
+        run: python3 tests/smart_extract.py CPP/7zip/Bundles/Alone2/_o/7zz
       - name: Package Linux x64
         run: |
           mkdir -p package/DOC dist
@@ -30,6 +32,7 @@ jobs:
           cp DOC/License.txt DOC/copying.txt DOC/unRarLicense.txt DOC/readme.txt package/DOC/
           cp C/Lz4/LICENSE-lz4.txt package/DOC/
           cp docs/compose/spec/lz4-support.md package/DOC/
+          cp docs/smart-extract.md package/DOC/
           cp CHANGELOG.txt package/
           git rev-parse HEAD > package/SOURCE_COMMIT.txt
           version=$(cat packaging/version.txt)
@@ -95,6 +98,12 @@ jobs:
           Copy-Item CPP/7zip/Bundles/Format7zF/x64/7z.dll CPP/7zip/UI/Console/x64/
           python tests/lz4_smoke.py CPP/7zip/UI/Console/x64/7z.exe --reference
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test smart extraction with standalone and DLL consoles
+        run: |
+          python tests/smart_extract.py CPP/7zip/Bundles/Alone2/x64/7zz.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/smart_extract.py CPP/7zip/UI/Console/x64/7z.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Package Windows x64
         shell: pwsh
         run: ./packaging/windows/package.ps1
@@ -137,4 +146,5 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" dist/* --verify-tag --title "7-Zip LZ4 26.05.2 — Multilingual installer" --notes-file docs/releases/26.05-lz4.md
+          version=$(cat packaging/version.txt)
+          gh release create "$RELEASE_TAG" dist/* --verify-tag --title "7-Zip LZ4 $version — Smart extraction" --notes-file docs/releases/26.05-lz4.md

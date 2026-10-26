@@ -1,0 +1,8 @@
+;!@Lang2@!UTF-8!
+; KartNid 7-Zip custom strings
+0
+7-Zip
+English
+English
+2331
+Smart Extract Here

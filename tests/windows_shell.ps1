@@ -41,6 +41,33 @@ $inputFile = Join-Path $TestDir 'input/payload.bin'
 $archive = Join-Path $TestDir 'extracted/payload.bin.lz4'
 & (Join-Path $InstallDir '7zz.exe') a -tlz4 $archive $inputFile -y | Out-Host
 if ($LASTEXITCODE -ne 0) { throw 'Cannot create shell test archive' }
+# Check localized menu text and migration of pre-feature user preferences.
+$optionsKey = 'HKCU:\Software\7-Zip\Options'
+$savedOptions = @{}
+foreach ($name in @('ContextMenu', 'SmartExtractMenuVersion')) {
+    $item = Get-ItemProperty $optionsKey -Name $name -ErrorAction SilentlyContinue
+    if ($null -ne $item) { $savedOptions[$name] = $item.$name }
+}
+try {
+    New-Item $optionsKey -Force | Out-Null
+    New-ItemProperty $optionsKey -Name ContextMenu -PropertyType DWord -Value 7 -Force | Out-Null
+    Remove-ItemProperty $optionsKey -Name SmartExtractMenuVersion -ErrorAction SilentlyContinue
+    Set-ItemProperty $settings -Name Lang -Value 'zh-cn'
+    $menu = [ShellSmoke]::Inspect($archive)
+    if (-not $menu.Contains('SevenZipSmartExtract') -or -not $menu.Contains('智能解压至此')) {
+        throw "Smart extraction missing from localized/migrated context menu: $menu"
+    }
+    New-ItemProperty $optionsKey -Name SmartExtractMenuVersion -PropertyType DWord -Value 1 -Force | Out-Null
+    if ([ShellSmoke]::Inspect($archive).Contains('SevenZipSmartExtract')) { throw 'Cannot disable smart context-menu item' }
+    Write-Output 'PASS Chinese smart menu, legacy-settings migration, and opt-out'
+} finally {
+    foreach ($name in @('ContextMenu', 'SmartExtractMenuVersion')) {
+        if ($savedOptions.ContainsKey($name)) { Set-ItemProperty $optionsKey -Name $name -Value $savedOptions[$name] }
+        else { Remove-ItemProperty $optionsKey -Name $name -ErrorAction SilentlyContinue }
+    }
+    if ($hadLang) { Set-ItemProperty $settings -Name Lang -Value $oldLang }
+    else { Remove-ItemProperty $settings -Name Lang -ErrorAction SilentlyContinue }
+}
 [ShellSmoke]::Invoke($archive, 'SevenZipExtractHere')
 $output = Join-Path $TestDir 'extracted/payload.bin'
 $deadline = (Get-Date).AddSeconds(30)
@@ -60,3 +87,24 @@ if ($zips.Count -ne 1) { throw 'Native context-menu compression produced no ZIP'
 & (Join-Path $InstallDir '7zz.exe') t $zips[0].FullName | Out-Host
 if ($LASTEXITCODE -ne 0) { throw 'Context-menu ZIP integrity check failed' }
 Write-Output 'PASS native IContextMenu Compress to ZIP launches installed 7zG.exe'
+
+# Native smart menu -> installed 7zG.exe -> common extraction engine, including TAR.
+foreach ($format in @('gzip', 'lz4')) {
+    $name = 'smart-' + $format
+    $tar = Join-Path $TestDir ($name + '.tar')
+    $extension = if ($format -eq 'gzip') { '.gz' } else { '.lz4' }
+    $compressed = $tar + $extension
+    & (Join-Path $InstallDir '7zz.exe') a -ttar $tar $inputFile -y | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot create TAR for smart menu test' }
+    & (Join-Path $InstallDir '7zz.exe') a "-t$format" $compressed $tar -y | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot compress TAR for smart menu test' }
+    Remove-Item $tar
+    [ShellSmoke]::Invoke($compressed, 'SevenZipSmartExtract')
+    $smartOutput = Join-Path $TestDir "$name/payload.bin"
+    $deadline = (Get-Date).AddSeconds(30)
+    do { Start-Sleep -Milliseconds 250 } until ((Test-Path $smartOutput) -or (Get-Date) -gt $deadline)
+    if (-not (Test-Path $smartOutput)) { throw "Smart menu did not unpack both $format/TAR layers" }
+    if ((Get-FileHash $inputFile).Hash -ne (Get-FileHash $smartOutput).Hash) { throw 'Smart menu output mismatch' }
+    if (Test-Path $tar) { throw 'Smart extraction left an intermediate TAR' }
+    Write-Output "PASS native smart menu: $format/TAR, archive-name folder, exact content, no intermediate TAR"
+}

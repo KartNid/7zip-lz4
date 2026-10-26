@@ -11,7 +11,7 @@
 #include "../../../Windows/Registry.h"
 #include "../../../Windows/Synchronization.h"
 
-// #include "../Explorer/ContextMenuFlags.h"
+#include "../Explorer/ContextMenuFlags.h"
 #include "ZipRegistry.h"
 
 using namespace NWindows;
@@ -539,6 +539,7 @@ void CInfo::Load()
 
 static LPCTSTR const kCascadedMenu = TEXT("CascadedMenu");
 static LPCTSTR const kContextMenu = TEXT("ContextMenu");
+static LPCTSTR const kSmartMenuVersion = TEXT("SmartExtractMenuVersion");
 static LPCTSTR const kMenuIcons = TEXT("MenuIcons");
 static LPCTSTR const kElimDup = TEXT("ElimDupExtract");
 static LPCTSTR const kWriteZoneId = TEXT("WriteZoneIdExtract");
@@ -556,7 +557,10 @@ void CContextMenuInfo::Save() const
   Key_Set_UInt32(key, kWriteZoneId, WriteZone);
   
   if (Flags_Def)
+  {
     key.SetValue(kContextMenu, Flags);
+    key.SetValue(kSmartMenuVersion, (UInt32)1);
+  }
 }
 
 void CContextMenuInfo::Load()
@@ -596,4 +600,7 @@ void CContextMenuInfo::Load()
   Key_Get_UInt32(key, kWriteZoneId, WriteZone);
 
   Flags_Def = (key.GetValue_UInt32_IfOk(kContextMenu, Flags) == ERROR_SUCCESS);
+  UInt32 version = 0;
+  if (key.GetValue_UInt32_IfOk(kSmartMenuVersion, version) != ERROR_SUCCESS)
+    Flags |= NContextMenuFlags::kSmartExtract;
 }

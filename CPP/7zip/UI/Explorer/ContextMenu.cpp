@@ -274,6 +274,7 @@ static const CContextMenuCommand g_Commands[] =
   CMD_REC( kOpen,        "Open",        IDS_CONTEXT_OPEN),
   CMD_REC( kExtract,     "Extract",     IDS_CONTEXT_EXTRACT),
   CMD_REC( kExtractHere, "ExtractHere", IDS_CONTEXT_EXTRACT_HERE),
+  CMD_REC( kSmartExtract, "SmartExtract", IDS_CONTEXT_SMART_EXTRACT),
   CMD_REC( kExtractTo,   "ExtractTo",   IDS_CONTEXT_EXTRACT_TO),
   CMD_REC( kTest,        "Test",        IDS_CONTEXT_TEST),
   CMD_REC( kCompress,           "Compress",           IDS_CONTEXT_COMPRESS),
@@ -792,7 +793,7 @@ Z7_COMWF_B CZipContextMenu::QueryContextMenu(HMENU hMenu, UINT indexMenu,
 
   ODS("### 150")
 
-  if (_fileNames.Size() > 0 && currentCommandID + 10 <= commandIDLast)
+  if (_fileNames.Size() > 0 && currentCommandID + 11 <= commandIDLast)
   {
     ODS("### needExtract list START")
     const bool needExtendedVerbs = ((flags & Z7_WIN_CMF_EXTENDEDVERBS) != 0);
@@ -852,6 +853,14 @@ Z7_COMWF_B CZipContextMenu::QueryContextMenu(HMENU hMenu, UINT indexMenu,
           CCommandMapItem cmi;
           cmi.Folder = baseFolder;
           AddCommand(kExtractHere, mainString, cmi);
+          MyInsertMenu(popupMenu, subIndex++, currentCommandID++, mainString, bitmap);
+        }
+
+        if ((contextMenuFlags & NContextMenuFlags::kSmartExtract) != 0)
+        {
+          CCommandMapItem cmi;
+          cmi.Folder = baseFolder;
+          AddCommand(kSmartExtract, mainString, cmi);
           MyInsertMenu(popupMenu, subIndex++, currentCommandID++, mainString, bitmap);
         }
 
@@ -1277,6 +1286,7 @@ HRESULT CZipContextMenu::InvokeCommandCommon(const CCommandMapItem &cmi)
       case kExtract:
       case kExtractHere:
       case kExtractTo:
+      case kSmartExtract:
       {
         if (_attribs.FirstDirIndex != -1)
         {
@@ -1286,7 +1296,8 @@ HRESULT CZipContextMenu::InvokeCommandCommon(const CCommandMapItem &cmi)
         ExtractArchives(_fileNames, cmi.Folder,
             (cmdID == kExtract), // showDialog
             (cmdID == kExtractTo) && _elimDup.Val, // elimDup
-            _writeZone
+            _writeZone,
+            cmdID == kSmartExtract
             );
         break;
       }

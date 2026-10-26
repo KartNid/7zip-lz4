@@ -30,6 +30,7 @@ public static class ShellSmoke {
     [DllImport("user32.dll")] static extern bool DestroyMenu(IntPtr menu);
     [DllImport("user32.dll")] static extern IntPtr GetMenu(IntPtr window);
     [DllImport("user32.dll")] static extern int GetMenuItemCount(IntPtr menu);
+    [DllImport("user32.dll")] static extern IntPtr GetSubMenu(IntPtr menu, int index);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetMenuString(IntPtr menu, uint id, StringBuilder text, int count, uint flags);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr LoadLibraryEx(string path, IntPtr file, uint flags);
     [DllImport("kernel32.dll")] static extern bool FreeLibrary(IntPtr module);
@@ -80,5 +81,34 @@ public static class ShellSmoke {
             DestroyMenu(menu);
             Marshal.FinalReleaseComObject(extension);
         }
+    }
+    static string ReadMenu(IntPtr menu) {
+        var text = new StringBuilder();
+        for (int i = 0; i < GetMenuItemCount(menu); ++i) {
+            var item = new StringBuilder(1024);
+            GetMenuString(menu, (uint)i, item, item.Capacity, 0x400);
+            text.Append(item).Append("|");
+            IntPtr child = GetSubMenu(menu, i);
+            if (child != IntPtr.Zero) text.Append(ReadMenu(child));
+        }
+        return text.ToString();
+    }
+    public static string Inspect(string file) {
+        object extension = Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("23170F69-40C1-278A-1000-000100020000")));
+        IntPtr menu = CreatePopupMenu();
+        try {
+            var data = new DataObject(DataFormats.FileDrop, new string[] { file });
+            Marshal.ThrowExceptionForHR(((IShellExtInit)extension).Initialize(IntPtr.Zero, (ComData)data, IntPtr.Zero));
+            var context = (IContextMenu)extension;
+            int hr = context.QueryContextMenu(menu, 0, 1, 0x7fff, 0);
+            Marshal.ThrowExceptionForHR(hr);
+            var verbs = new StringBuilder(ReadMenu(menu));
+            for (uint offset = 0; offset < (hr & 0xffff); ++offset) {
+                var verb = new StringBuilder(256);
+                if (context.GetCommandString(new UIntPtr(offset), 0, IntPtr.Zero, verb, 256) >= 0)
+                    verbs.Append(verb).Append("|");
+            }
+            return verbs.ToString();
+        } finally { DestroyMenu(menu); Marshal.FinalReleaseComObject(extension); }
     }
 }

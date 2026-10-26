@@ -13,7 +13,7 @@ dialog. `/LANG=en`, `/LANG=zhcn`, and `/LANG=zhtw` override this selection.
 
 ## Install
 
-Run `7z-lz4-26.05.2-x64-setup.exe`. Administrative privileges are required for
+Run `7z-lz4-26.05.3-x64-setup.exe`. Administrative privileges are required for
 the machine-wide shell extension. The default directory is
 `C:\Program Files\7-Zip-lz4`; other directories, including paths with spaces,
 are supported. All seven application binaries are built from this repository;
@@ -45,7 +45,7 @@ prompted so Explorer can load the new extension. The installer is unsigned.
 Silent installation for deployment/testing:
 
 ```powershell
-.\7z-lz4-26.05.2-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS="shell,associations" /DIR="C:\Tools\7-Zip LZ4"
+.\7z-lz4-26.05.3-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS="shell,associations" /DIR="C:\Tools\7-Zip LZ4"
 ```
 
 Use `/TASKS=""` to omit shell integration and Open with registration.

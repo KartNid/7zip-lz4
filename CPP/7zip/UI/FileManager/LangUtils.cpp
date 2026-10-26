@@ -21,8 +21,15 @@ UString g_LangID;
 
 // static
 CLang g_Lang;
+static CLang g_CustomLang;
 static bool g_Loaded = false;
 static NSynchronization::CCriticalSection g_CriticalSection;
+
+static const wchar_t *GetLangValue(UInt32 id)
+{
+  const wchar_t *s = g_CustomLang.Get(id);
+  return s ? s : g_Lang.Get(id);
+}
 
 bool LangOpen(CLang &lang, CFSTR fileName);
 bool LangOpen(CLang &lang, CFSTR fileName)
@@ -48,7 +55,7 @@ void LoadLangOneTime()
 
 void LangSetDlgItemText(HWND dialog, UInt32 controlID, UInt32 langID)
 {
-  const wchar_t *s = g_Lang.Get(langID);
+  const wchar_t *s = GetLangValue(langID);
   if (s)
   {
     CWindow window(GetDlgItem(dialog, (int)controlID));
@@ -81,7 +88,7 @@ void LangSetDlgItems(HWND dialog, const UInt32 *ids, unsigned numItems)
     CWindow window(GetDlgItem(dialog, (int)pair.ControlID));
     if (window)
     {
-      const wchar_t *s = g_Lang.Get(pair.LangID);
+      const wchar_t *s = GetLangValue(pair.LangID);
       if (s)
         window.SetText(s);
     }
@@ -99,7 +106,7 @@ void LangSetDlgItems_Colon(HWND dialog, const UInt32 *ids, unsigned numItems)
   for (unsigned i = 0; i < numItems; i++)
   {
     const UInt32 id = ids[i];
-    const wchar_t *s = g_Lang.Get(id);
+    const wchar_t *s = GetLangValue(id);
     if (s)
     {
       CWindow window(GetDlgItem(dialog, (int)id));
@@ -115,7 +122,7 @@ void LangSetDlgItems_RemoveColon(HWND dialog, const UInt32 *ids, unsigned numIte
   for (unsigned i = 0; i < numItems; i++)
   {
     const UInt32 id = ids[i];
-    const wchar_t *s = g_Lang.Get(id);
+    const wchar_t *s = GetLangValue(id);
     if (s)
     {
       CWindow window(GetDlgItem(dialog, (int)id));
@@ -129,14 +136,14 @@ void LangSetDlgItems_RemoveColon(HWND dialog, const UInt32 *ids, unsigned numIte
 
 void LangSetWindowText(HWND window, UInt32 langID)
 {
-  const wchar_t *s = g_Lang.Get(langID);
+  const wchar_t *s = GetLangValue(langID);
   if (s)
     MySetWindowText(window, s);
 }
 
 UString LangString(UInt32 langID)
 {
-  const wchar_t *s = g_Lang.Get(langID);
+  const wchar_t *s = GetLangValue(langID);
   if (s)
     return s;
   return MyLoadString(langID);
@@ -149,7 +156,7 @@ void AddLangString(UString &s, UInt32 langID)
 
 void LangString(UInt32 langID, UString &dest)
 {
-  const wchar_t *s = g_Lang.Get(langID);
+  const wchar_t *s = GetLangValue(langID);
   if (s)
   {
     dest = s;
@@ -161,7 +168,7 @@ void LangString(UInt32 langID, UString &dest)
 void LangString_OnlyFromLangFile(UInt32 langID, UString &dest)
 {
   dest.Empty();
-  const wchar_t *s = g_Lang.Get(langID);
+  const wchar_t *s = GetLangValue(langID);
   if (s)
     dest = s;
 }
@@ -305,7 +312,7 @@ static void OpenDefaultLang()
   }
 }
 
-void ReloadLang()
+static void ReloadLangBase()
 {
   g_Lang.Clear();
   ReadRegLang(g_LangID);
@@ -327,6 +334,21 @@ void ReloadLang()
       s.Insert(0, GetLangDirPrefix());
       LangOpen(g_Lang, s);
     }
+  }
+}
+
+void ReloadLang()
+{
+  ReloadLangBase();
+  g_CustomLang.Clear();
+  // Custom strings are additive; preserve the verified upstream catalogs.
+  if (!g_LangID.IsEmpty() && g_LangID.ReverseFind_PathSepar() < 0
+      && g_LangID.ReverseFind_Dot() < 0)
+  {
+    FString file = GetLangDirPrefix() + FTEXT("Custom") FSTRING_PATH_SEPARATOR;
+    file += us2fs(g_LangID);
+    file += FTEXT(".txt");
+    LangOpen(g_CustomLang, file);
   }
 }
 

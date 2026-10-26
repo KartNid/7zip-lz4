@@ -1,6 +1,6 @@
 ﻿; Save this script as UTF-8 with BOM so Chinese task labels remain intact.
 #ifndef AppVersion
-  #define AppVersion "26.05.2"
+  #define AppVersion "26.05.3"
 #endif
 #ifndef PackageDir
   #define PackageDir "..\..\package"

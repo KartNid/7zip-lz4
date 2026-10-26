@@ -32,6 +32,215 @@ static void SetErrorMessage(const char *message,
   s += fs2us(path);
 }
 
+// Decode a single compression stream to a temporary file so a large TAR can
+// be inspected and extracted with normal seekable archive handling. The outer
+// frame must finish successfully (including its checksum) before any output.
+Z7_CLASS_IMP_COM_1(CSmartStreamCallback, IArchiveExtractCallback)
+  Z7_IFACE_COM7_IMP(IProgress)
+public:
+  CMyComPtr<ISequentialOutStream> Stream;
+  IFolderArchiveExtractCallback *Progress;
+  Int32 OperationResult;
+  bool Finished;
+};
+
+Z7_COM7F_IMF(CSmartStreamCallback::SetTotal(UInt64 /* size */))
+{
+  return S_OK;
+}
+
+Z7_COM7F_IMF(CSmartStreamCallback::SetCompleted(const UInt64 * /* value */))
+{
+  return Progress->SetCompleted(NULL);
+}
+
+Z7_COM7F_IMF(CSmartStreamCallback::GetStream(UInt32 index,
+    ISequentialOutStream **stream, Int32 askMode))
+{
+  *stream = NULL;
+  if (index != 0 || askMode != NArchive::NExtract::NAskMode::kExtract)
+    return E_INVALIDARG;
+  *stream = Stream;
+  (*stream)->AddRef();
+  return S_OK;
+}
+
+Z7_COM7F_IMF(CSmartStreamCallback::PrepareOperation(Int32 /* askMode */))
+{
+  return S_OK;
+}
+
+Z7_COM7F_IMF(CSmartStreamCallback::SetOperationResult(Int32 result))
+{
+  OperationResult = result;
+  Finished = true;
+  return S_OK;
+}
+
+static bool Smart_IsCompressionStream(const CCodecs *codecs, const CArc &arc)
+{
+  if (arc.FormatIndex < 0)
+    return false;
+  const UString &name = codecs->Formats[(unsigned)arc.FormatIndex].Name;
+  return name.IsEqualTo_Ascii_NoCase("gzip")
+      || name.IsEqualTo_Ascii_NoCase("bzip2")
+      || name.IsEqualTo_Ascii_NoCase("xz")
+      || name.IsEqualTo_Ascii_NoCase("lz4")
+      || name.IsEqualTo_Ascii_NoCase("zstd")
+      || name.IsEqualTo_Ascii_NoCase("lzma")
+      || name.IsEqualTo_Ascii_NoCase("Z");
+}
+
+static HRESULT Smart_OpenTar(CCodecs *codecs, CArchiveLink &outer,
+    const CExtractOptions &options, IOpenCallbackUI *openCallback,
+    IFolderArchiveExtractCallback *progress, CTempFile &temp,
+    CArchiveLink &tar, bool &isTar)
+{
+  isTar = false;
+  const CArc &arc = outer.Arcs.Front();
+  if (!Smart_IsCompressionStream(codecs, arc))
+    return S_OK;
+  UInt32 count;
+  RINOK(arc.Archive->GetNumberOfItems(&count))
+  if (count != 1)
+    return S_OK;
+
+  CMyComPtr2_Create<IOutStream, COutFileStream> out;
+  out->ProcessedSize = 0;
+  if (!temp.CreateRandomInTempFolder(FTEXT("7z-smart-"), &out->File))
+    return GetLastError_noZero_HRESULT();
+  CMyComPtr2_Create<IArchiveExtractCallback, CSmartStreamCallback> cb;
+  cb->Stream = out.Interface();
+  cb->Progress = progress;
+  cb->OperationResult = NArchive::NExtract::NOperationResult::kDataError;
+  cb->Finished = false;
+  const UInt32 index = 0;
+  const HRESULT res = arc.Archive->Extract(&index, 1, 0, cb);
+  cb->Stream.Release();
+  const HRESULT closeRes = out->Close();
+  RINOK(res)
+  RINOK(closeRes)
+  if (!cb->Finished || cb->OperationResult != NArchive::NExtract::NOperationResult::kOK)
+  {
+    RINOK(progress->SetOperationResult(cb->OperationResult, false))
+    return E_FAIL;
+  }
+
+  const int format = codecs->FindFormatForArchiveType(UString("tar"));
+  if (format < 0)
+    return S_OK;
+  CObjectVector<COpenType> types;
+  COpenType type;
+  type.FormatIndex = format;
+  type.Recursive = false;
+  types.Add(type);
+  CIntVector excluded;
+  COpenOptions op;
+  op.codecs = codecs;
+  op.types = &types;
+  op.excludedFormats = &excluded;
+  op.filePath = fs2us(temp.GetPath());
+  #ifndef Z7_SFX
+  op.props = &options.Properties;
+  #else
+  UNUSED_VAR(options)
+  #endif
+  const HRESULT openRes = tar.Open_Strict(op, openCallback);
+  if (openRes == S_FALSE)
+  {
+    UString name;
+    RINOK(arc.GetItem_Path(0, name))
+    if (name.Len() >= 4 && StringsAreEqualNoCase_Ascii(name.RightPtr(4), ".tar"))
+      return E_FAIL; // An explicitly named TAR must not silently become a file.
+    return S_OK; // A normal single-file compression stream, not a TAR.
+  }
+  RINOK(openRes)
+  isTar = true;
+  return S_OK;
+}
+
+static UString Smart_ArchiveName(const UString &path, bool compressedTar)
+{
+  UString name = path.Ptr((unsigned)(path.ReverseFind_PathSepar() + 1));
+  int dot = name.ReverseFind(L'.');
+  if (dot > 0)
+    name.DeleteFrom((unsigned)dot);
+  if (compressedTar && name.Len() > 4
+      && StringsAreEqualNoCase_Ascii(name.RightPtr(4), ".tar"))
+    name.DeleteFrom(name.Len() - 4);
+  return Get_Correct_FsFile_Name(name);
+}
+
+static HRESULT Smart_OutputDir(const CArc &arc, const CRecordVector<UInt32> &indices,
+    const UString &archiveName, FString &dir)
+{
+  bool oneFolder = true;
+  UString root;
+  FOR_VECTOR (i, indices)
+  {
+    CReadArcItem item;
+    RINOK(arc.GetItem(indices[i], item))
+    unsigned first = 0;
+    while (first < item.PathParts.Size() && item.PathParts[first] == L".")
+      first++;
+    if (first == item.PathParts.Size() && item.IsDir)
+      continue; // TAR's optional './' root entry is not a second folder.
+    if (first == item.PathParts.Size() || item.PathParts[first].IsEmpty()
+        || item.PathParts[first] == L".."
+        || (first + 1 == item.PathParts.Size() && !item.IsDir))
+    {
+      oneFolder = false;
+      break;
+    }
+    if (root.IsEmpty())
+      root = item.PathParts[first];
+    else if (root != item.PathParts[first])
+    {
+      oneFolder = false;
+      break;
+    }
+  }
+  if (dir.IsEmpty())
+    dir = FTEXT(".");
+  if (!CreateComplexDir(dir))
+    return GetLastError_noZero_HRESULT();
+  NName::NormalizeDirPathPrefix(dir);
+  const FString prefix = dir;
+  if (oneFolder && !root.IsEmpty())
+  {
+    const FString folder = prefix + us2fs(Get_Correct_FsFile_Name(root));
+    // Reserve a fresh root. Reusing an existing tree could follow a junction
+    // or symlink and would mix this archive with unrelated existing files.
+    if (!NFind::DoesFileOrDirExist(folder) && CreateDir(folder))
+      return S_OK;
+    if (!NFind::DoesFileOrDirExist(folder))
+      return GetLastError_noZero_HRESULT();
+  }
+  // Reserve a new folder, preserving both existing files and directories.
+  for (UInt32 number = 1; number != 0; number++)
+  {
+    UString name = archiveName;
+    if (number != 1)
+    {
+      name += " (";
+      name.Add_UInt32(number);
+      name.Add_Char(')');
+    }
+    const FString candidate = prefix + us2fs(name);
+    if (NFind::DoesFileOrDirExist(candidate))
+      continue;
+    if (CreateDir(candidate))
+    {
+      dir = candidate;
+      NName::NormalizeDirPathPrefix(dir);
+      return S_OK;
+    }
+    if (!NFind::DoesFileOrDirExist(candidate))
+      return GetLastError_noZero_HRESULT();
+  }
+  return E_FAIL;
+}
+
 
 static HRESULT DecompressArchive(
     CCodecs *codecs,
@@ -39,6 +248,7 @@ static HRESULT DecompressArchive(
     UInt64 packSize,
     const NWildcard::CCensorNode &wildcardCensor,
     const CExtractOptions &options,
+    const UString &smartName,
     bool calcCrc,
     IExtractCallbackUI *callback,
     IFolderArchiveExtractCallback *callbackFAE,
@@ -54,7 +264,7 @@ static HRESULT DecompressArchive(
   UStringVector removePathParts;
 
   FString outDir = options.OutputDir;
-  if (options.OutDirMode != NExtractOutDirMode::k_Direct)
+  if (!options.SmartExtract && options.OutDirMode != NExtractOutDirMode::k_Direct)
   {
     UString replaceName = arc.DefaultName;
     if (arcLink.Arcs.Size() > 1)
@@ -80,7 +290,7 @@ static HRESULT DecompressArchive(
   UString elimPrefix; // only pure name without dir delimiter
   FString outDirReduced = outDir;
   
-  if (options.ElimDup.Val && options.PathMode != NExtract::NPathMode::kAbsPaths)
+  if (!options.SmartExtract && options.ElimDup.Val && options.PathMode != NExtract::NPathMode::kAbsPaths)
   {
     UString dirPrefix;
     SplitPathToParts_Smart(fs2us(outDir), dirPrefix, elimPrefix);
@@ -180,6 +390,9 @@ static HRESULT DecompressArchive(
       return callback->ExtractResult(S_OK);
     }
   }
+
+  if (options.SmartExtract)
+    RINOK(Smart_OutputDir(arc, realIndices, smartName, outDir))
 
   if (elimIsPossible)
   {
@@ -303,6 +516,12 @@ HRESULT Extract(
     CDecompressStat &st)
 {
   st.Clear();
+  if (options.SmartExtract && (options.StdInMode || options.StdOutMode
+      || options.TestMode || options.PathMode != NExtract::NPathMode::kFullPaths))
+  {
+    errorMessage = "Smart extraction requires file input and full-path extraction (x).";
+    return E_INVALIDARG;
+  }
   UInt64 totalPackSize = 0;
   CRecordVector<UInt64> arcSizes;
 
@@ -540,7 +759,23 @@ HRESULT Extract(
     #endif
     */
 
-    CArc &arc = arcLink.Arcs.Back();
+    CTempFile smartTemp;
+    CArchiveLink smartTar;
+    CArchiveLink *extractLink = &arcLink;
+    bool compressedTar = false;
+    if (options.SmartExtract)
+    {
+      const HRESULT smartRes = Smart_OpenTar(codecs, arcLink, options,
+          openCallback, faeCallback, smartTemp, smartTar, compressedTar);
+      if (smartRes != S_OK)
+      {
+        errorMessage = "Cannot completely decode compressed stream for smart extraction.";
+        return smartRes;
+      }
+      if (compressedTar)
+        extractLink = &smartTar;
+    }
+    CArc &arc = extractLink->Arcs.Back();
     arc.MTime.Def = !options.StdInMode
         #ifdef _WIN32
         && !fi.IsDevice
@@ -559,10 +794,11 @@ HRESULT Extract(
 
     RINOK(DecompressArchive(
         codecs,
-        arcLink,
+        *extractLink,
         fi.Size + arcLink.VolumesSize,
         wildcardCensor,
         options,
+        Smart_ArchiveName(arcPath, compressedTar),
         calcCrc,
         extractCallback, faeCallback, ecs,
         errorMessage, packProcessed))

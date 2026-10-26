@@ -1,2 +1,2 @@
 # Keep vendored language resources byte-identical to the verified upstream files.
-Lang/* -text
+Lang/** -text

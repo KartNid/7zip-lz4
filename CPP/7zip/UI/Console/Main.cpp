@@ -189,6 +189,7 @@ static const char * const kHelpString =
     "  -so : write data to stdout\n"
     "  -spd : disable wildcard matching for file names\n"
     "  -spe : eliminate duplication of root folder for extract command\n"
+    "  -smart : smart destination folder and compressed TAR extraction (x)\n"
     "  -spf[2] : use fully qualified file paths\n"
     "  -ssc[-] : set sensitive case mode\n"
     "  -sse : stop archive creating, if it can't open some input file\n"

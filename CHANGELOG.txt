@@ -1,3 +1,12 @@
+26.05.3 / v26.05-lz4.3
+- Add native Smart Extract Here to Explorer and File Manager context menus and their settings.
+- Keep a unique top-level folder; wrap loose files and mixed layouts in an archive-name folder.
+- Decode compressed TAR streams in one operation, including TAR.GZ, TAR.XZ, TAR.BZ2 and TAR.LZ4.
+- Reserve new output folders and number name collisions; preserve existing trees and output links.
+- Validate outer streams before TAR extraction and automatically remove intermediate temporary files.
+- Add -smart / -smart- CLI switches and additive English/Chinese/German menu catalogs.
+- Test 41 layout cases, corruption, collisions, passwords, cleanup, and installed native shell commands.
+
 26.05.2 / v26.05-lz4.2
 - Add all 93 official language resources to the repository and Windows ZIP/installer.
 - Add an English, Simplified Chinese, and Traditional Chinese Inno Setup installer.

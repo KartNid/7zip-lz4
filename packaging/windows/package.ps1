@@ -14,7 +14,7 @@ foreach ($file in $binaries.Values) { Copy-Item $file package/ }
 Copy-Item Lang package/ -Recurse -Force
 Copy-Item DOC/License.txt, DOC/copying.txt, DOC/unRarLicense.txt, DOC/readme.txt package/DOC/
 Copy-Item C/Lz4/LICENSE-lz4.txt package/DOC/
-Copy-Item docs/compose/spec/lz4-support.md, docs/windows-install.md, docs/languages.json package/DOC/
+Copy-Item docs/compose/spec/lz4-support.md, docs/windows-install.md, docs/smart-extract.md, docs/languages.json package/DOC/
 Copy-Item CHANGELOG.txt package/
 git rev-parse HEAD | Set-Content package/SOURCE_COMMIT.txt
 Compress-Archive -Path package/* -DestinationPath "dist/7zip-$Version-lz4-windows-x64.zip"
