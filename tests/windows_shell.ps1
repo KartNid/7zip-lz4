@@ -108,3 +108,27 @@ foreach ($format in @('gzip', 'lz4')) {
     if (Test-Path $tar) { throw 'Smart extraction left an intermediate TAR' }
     Write-Output "PASS native smart menu: $format/TAR, archive-name folder, exact content, no intermediate TAR"
 }
+
+# A previously existing junction must not redirect automatic extraction.
+$junctionCase = Join-Path $TestDir 'smart-junction'
+$photos = Join-Path $junctionCase 'source/photos'
+$outside = Join-Path $junctionCase 'outside'
+New-Item -ItemType Directory -Force $photos, $outside | Out-Null
+[IO.File]::WriteAllText((Join-Path $photos 'photo.txt'), 'keep within selected output')
+$treeArchive = Join-Path $junctionCase 'photos.zip'
+& (Join-Path $InstallDir '7zz.exe') a -tzip $treeArchive $photos -y | Out-Host
+if ($LASTEXITCODE -ne 0) { throw 'Cannot create junction test archive' }
+$junction = Join-Path $junctionCase 'photos'
+New-Item -ItemType Junction -Path $junction -Target $outside | Out-Null
+try {
+    [ShellSmoke]::Invoke($treeArchive, 'SevenZipSmartExtract')
+    $safeOutput = Join-Path $junctionCase 'photos (2)/photos/photo.txt'
+    $deadline = (Get-Date).AddSeconds(30)
+    do { Start-Sleep -Milliseconds 250 } until ((Test-Path $safeOutput) -or (Get-Date) -gt $deadline)
+    if (-not (Test-Path $safeOutput)) { throw 'Smart menu did not isolate an existing junction' }
+    if (@(Get-ChildItem $outside).Count -ne 0) { throw 'Smart extraction followed an existing junction' }
+    Write-Output 'PASS native smart menu preserves existing junction and uses a new numbered container'
+} finally {
+    # Delete only the junction, never recurse into its target.
+    [IO.Directory]::Delete($junction)
+}

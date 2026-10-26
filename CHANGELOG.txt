@@ -5,7 +5,7 @@
 - Reserve new output folders and number name collisions; preserve existing trees and output links.
 - Validate outer streams before TAR extraction and automatically remove intermediate temporary files.
 - Add -smart / -smart- CLI switches and additive English/Chinese/German menu catalogs.
-- Test 41 layout cases, corruption, collisions, passwords, cleanup, and installed native shell commands.
+- Test 43 layout cases, corruption, collisions, passwords, cleanup, and installed native shell commands.
 
 26.05.2 / v26.05-lz4.2
 - Add all 93 official language resources to the repository and Windows ZIP/installer.

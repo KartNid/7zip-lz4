@@ -4,6 +4,7 @@ import gzip
 import io
 import lzma
 import os
+import random
 from pathlib import Path
 import subprocess
 import sys
@@ -13,6 +14,8 @@ import zipfile
 
 
 def main():
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
     binary = str(Path(sys.argv[1]).resolve())
     passed = 0
     with tempfile.TemporaryDirectory(prefix='7zip-smart-test-') as temp:
@@ -138,6 +141,11 @@ def main():
         frame = lz4.frame.compress(tar_data({'a.txt': b'a'}))
         check('bundle.tar.lz4', struct.pack('<II', 0x184D2A50, 4) + b'skip' + frame,
               {'bundle/a.txt': b'a'})
+        large = random.Random(17).randbytes(2 * 1024 * 1024 + 17)
+        for extension, compress in [('gz', gzip.compress),
+                                    ('lz4', lambda b: lz4.frame.compress(b, content_checksum=True))]:
+            check('large.tar.' + extension, compress(tar_data({'big.bin': large})),
+                  {'large/big.bin': large})
 
         for extension, compress in wrappers:
             frame = compress(tar_data({'a.txt': b'a'}))
