@@ -204,6 +204,7 @@ Z7_COM7F_IMF(CExtractCallbackImp::AskOverwrite(
     Int32 *answer))
 {
   COverwriteDialog dialog;
+  dialog.SmartMode = SmartExtract;
 
   dialog.OldFileInfo.SetTime2(existTime);
   dialog.OldFileInfo.SetSize2(existSize);
@@ -226,6 +227,7 @@ Z7_COM7F_IMF(CExtractCallbackImp::AskOverwrite(
     case IDB_YES_TO_ALL:  *answer = NOverwriteAnswer::kYesToAll; break;
     case IDB_NO_TO_ALL:   *answer = NOverwriteAnswer::kNoToAll; break;
     case IDB_AUTO_RENAME: *answer = NOverwriteAnswer::kAutoRename; break;
+    case IDR_SMART_RENAME: *answer = NOverwriteAnswer::kRenameOnce; break;
     default: return E_FAIL;
   }
   return S_OK;

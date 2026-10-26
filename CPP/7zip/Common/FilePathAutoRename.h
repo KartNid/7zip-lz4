@@ -6,5 +6,6 @@
 #include "../../Common/MyString.h"
 
 bool AutoRenamePath(FString &fullProcessedPath);
+bool AutoRenamePathSmart(FString &fullProcessedPath);
 
 #endif

@@ -171,6 +171,12 @@ static UString Smart_ArchiveName(const UString &path, bool compressedTar)
   return Get_Correct_FsFile_Name(name);
 }
 
+static bool Smart_IsRealDir(const FString &path)
+{
+  NFind::CFileInfo info;
+  return info.Find(path) && info.IsDir() && !info.IsOsSymLink();
+}
+
 static HRESULT Smart_OutputDir(const CArc &arc, const CRecordVector<UInt32> &indices,
     const UString &archiveName, FString &dir)
 {
@@ -209,14 +215,13 @@ static HRESULT Smart_OutputDir(const CArc &arc, const CRecordVector<UInt32> &ind
   if (oneFolder && !root.IsEmpty())
   {
     const FString folder = prefix + us2fs(Get_Correct_FsFile_Name(root));
-    // Reserve a fresh root. Reusing an existing tree could follow a junction
-    // or symlink and would mix this archive with unrelated existing files.
-    if (!NFind::DoesFileOrDirExist(folder) && CreateDir(folder))
+    // Merge ordinary directories. Links and same-name files still need a container.
+    if (Smart_IsRealDir(folder) || CreateDir(folder))
       return S_OK;
     if (!NFind::DoesFileOrDirExist(folder))
       return GetLastError_noZero_HRESULT();
   }
-  // Reserve a new folder, preserving both existing files and directories.
+  // Reuse an ordinary archive-name folder; number collisions with files or links.
   for (UInt32 number = 1; number != 0; number++)
   {
     UString name = archiveName;
@@ -227,9 +232,7 @@ static HRESULT Smart_OutputDir(const CArc &arc, const CRecordVector<UInt32> &ind
       name.Add_Char(')');
     }
     const FString candidate = prefix + us2fs(name);
-    if (NFind::DoesFileOrDirExist(candidate))
-      continue;
-    if (CreateDir(candidate))
+    if (Smart_IsRealDir(candidate) || CreateDir(candidate))
     {
       dir = candidate;
       NName::NormalizeDirPathPrefix(dir);
@@ -431,6 +434,7 @@ static HRESULT DecompressArchive(
       packSize);
 
   ecs->Is_elimPrefix_Mode = elimIsPossible;
+  ecs->SmartExtract = options.SmartExtract;
 
   
   #ifdef SUPPORT_LINKS

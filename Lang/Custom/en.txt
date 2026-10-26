@@ -6,3 +6,13 @@ English
 English
 2331
 Smart Extract Here
+3520
+Duplicate files
+A file with the same name already exists.
+Existing file
+File to extract
+Choose an action:
+&Skip
+&Overwrite
+&Rename: {0}
+Apply to &all files

@@ -26,6 +26,13 @@ struct InvokeInfo {
     public IntPtr icon;
 }
 public static class ShellSmoke {
+    delegate bool EnumWindowProc(IntPtr window, IntPtr param);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowProc callback, IntPtr param);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+    [DllImport("user32.dll")] static extern IntPtr GetDlgItem(IntPtr window, int id);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessage(IntPtr window, uint msg, IntPtr wparam, IntPtr lparam);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessage(IntPtr window, uint msg, IntPtr wparam, StringBuilder text);
+    [DllImport("user32.dll")] static extern bool PostMessage(IntPtr window, uint msg, IntPtr wparam, IntPtr lparam);
     [DllImport("user32.dll")] static extern IntPtr CreatePopupMenu();
     [DllImport("user32.dll")] static extern bool DestroyMenu(IntPtr menu);
     [DllImport("user32.dll")] static extern IntPtr GetMenu(IntPtr window);
@@ -35,6 +42,38 @@ public static class ShellSmoke {
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr LoadLibraryEx(string path, IntPtr file, uint flags);
     [DllImport("kernel32.dll")] static extern bool FreeLibrary(IntPtr module);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int LoadString(IntPtr module, uint id, StringBuilder text, int count);
+
+    public static IntPtr ConflictDialog(int processId) {
+        IntPtr result = IntPtr.Zero;
+        EnumWindows(delegate(IntPtr window, IntPtr param) {
+            uint pid;
+            GetWindowThreadProcessId(window, out pid);
+            if (pid == (uint)processId && GetDlgItem(window, 3525) != IntPtr.Zero) {
+                result = window;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return result;
+    }
+    public static string DialogText(IntPtr dialog, int id) {
+        var text = new StringBuilder(4096);
+        IntPtr control = id == 0 ? dialog : GetDlgItem(dialog, id);
+        SendMessage(control, 0x000d, new IntPtr(text.Capacity), text);
+        return text.ToString();
+    }
+    public static bool Checked(IntPtr dialog, int id) {
+        return SendMessage(GetDlgItem(dialog, id), 0x00f0, IntPtr.Zero, IntPtr.Zero) == new IntPtr(1);
+    }
+    public static void DecideConflict(IntPtr dialog, int action, bool all) {
+        if (action != 2) {
+            SendMessage(GetDlgItem(dialog, action), 0x00f5, IntPtr.Zero, IntPtr.Zero);
+            SendMessage(GetDlgItem(dialog, 3528), 0x00f1, new IntPtr(all ? 1 : 0), IntPtr.Zero);
+        }
+        int button = action == 2 ? 2 : 1;
+        if (!PostMessage(dialog, 0x0111, new IntPtr(button), GetDlgItem(dialog, button)))
+            throw new Exception("Cannot confirm conflict dialog");
+    }
 
     public static string Resource(string path) {
         IntPtr module = LoadLibraryEx(path, IntPtr.Zero, 2);

@@ -6,3 +6,13 @@ German
 Deutsch
 2331
 Hier intelligent entpacken
+3520
+Doppelte Dateien
+Eine Datei mit diesem Namen ist bereits vorhanden.
+Vorhandene Datei
+Zu entpackende Datei
+Aktion auswählen:
+Über&springen
+Über&schreiben
+&Umbenennen: {0}
+Auf &alle Dateien anwenden

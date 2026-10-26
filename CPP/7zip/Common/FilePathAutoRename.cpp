@@ -44,3 +44,30 @@ bool AutoRenamePath(FString &path)
   }
   return !MakeAutoName(name, extension, right, path);
 }
+
+// Smart extraction preserves the extension and uses the first free "name (2)".
+bool AutoRenamePathSmart(FString &path)
+{
+  FString name = path;
+  FString extension;
+  const int dot = path.ReverseFind_Dot();
+  if (dot > path.ReverseFind_PathSepar() + 1)
+  {
+    name.DeleteFrom((unsigned)dot);
+    extension = path.Ptr((unsigned)dot);
+  }
+  for (UInt32 number = 2; number != 0; number++)
+  {
+    FString candidate = name;
+    candidate += FTEXT(" (");
+    candidate.Add_UInt32(number);
+    candidate += FTEXT(")");
+    candidate += extension;
+    if (!NFile::NFind::DoesFileOrDirExist(candidate))
+    {
+      path = candidate;
+      return true;
+    }
+  }
+  return false;
+}

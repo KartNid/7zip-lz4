@@ -20,4 +20,17 @@ print('PASS 93 official language resources: manifest, UTF-8, signatures, and che
 for path in (root / 'Lang/Custom').glob('*.txt'):
     text = path.read_text(encoding='utf-8-sig').replace('\r\n', '\n')
     assert text.startswith(';!@Lang2@!UTF-8!\n') and '\n2331\n' in text, path
+    strings = {}
+    current_id = None
+    for line in text.splitlines():
+        if not line or line.startswith(';'):
+            continue
+        if line.isdecimal():
+            current_id = int(line)
+        else:
+            assert current_id is not None and current_id not in strings, path
+            strings[current_id] = line
+            current_id += 1
+    assert all(strings.get(i) for i in range(3520, 3529)), path
+    assert '{0}' in strings[3527], path
 print('PASS additive custom UI catalogs')

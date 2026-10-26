@@ -1,3 +1,11 @@
+26.05.4 / v26.05-lz4.4
+- Merge smart extraction into existing common-root and archive-name directories.
+- Add a Windows duplicate-file dialog with skip, overwrite, rename, and apply-to-all choices.
+- Keep per-file choices separate from apply-to-all; cancellation stops extraction.
+- Preview and use extension-preserving numbered names such as app (2).info.
+- Translate the dialog into English, Simplified Chinese, Traditional Chinese, and German.
+- Test merging and conflict policies for ZIP and compressed TAR, including installed Windows GUI decisions.
+
 26.05.3 / v26.05-lz4.3
 - Add native Smart Extract Here to Explorer and File Manager context menus and their settings.
 - Keep a unique top-level folder; wrap loose files and mixed layouts in an archive-name folder.

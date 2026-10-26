@@ -303,7 +303,8 @@ CArchiveExtractCallback::CArchiveExtractCallback():
     // Write_MTime(true),
     Is_elimPrefix_Mode(false),
     _arc(NULL),
-    _multiArchives(false)
+    _multiArchives(false),
+    SmartExtract(false)
 {
   #ifdef Z7_USE_SECURITY_CODE
   _saclEnabled = InitLocalPrivileges();
@@ -1246,6 +1247,7 @@ void CArchiveExtractCallback::CreateFolders()
 HRESULT CArchiveExtractCallback::CheckExistFile(FString &fullProcessedPath, bool &needExit)
 {
   needExit = true; // it was set already before
+  bool renameOnce = false;
 
   NFind::CFileInfo fileInfo;
 
@@ -1290,14 +1292,17 @@ HRESULT CArchiveExtractCallback::CheckExistFile(FString &fullProcessedPath, bool
         case NOverwriteAnswer::kAutoRename:
           _overwriteMode = NExtract::NOverwriteMode::kRename;
           break;
+        case NOverwriteAnswer::kRenameOnce:
+          renameOnce = true;
+          break;
         default:
           return E_FAIL;
       }
     } // NExtract::NOverwriteMode::kAsk
 
-    if (_overwriteMode == NExtract::NOverwriteMode::kRename)
+    if (renameOnce || _overwriteMode == NExtract::NOverwriteMode::kRename)
     {
-      if (!AutoRenamePath(fullProcessedPath))
+      if (!(SmartExtract ? AutoRenamePathSmart(fullProcessedPath) : AutoRenamePath(fullProcessedPath)))
       {
         RINOK(SendMessageError(kCantAutoRename, fullProcessedPath))
         return E_FAIL;
@@ -1394,6 +1399,25 @@ HRESULT CArchiveExtractCallback::GetExtractStream(CMyComPtr<ISequentialOutStream
 
   CorrectPathParts();
   UString processedPath (MakePathFromParts(_item.PathParts));
+
+  if (SmartExtract)
+  {
+    // Reused trees can contain directory links. Do not create children through them.
+    FString path = _dirPathPrefix;
+    FOR_VECTOR (i, _item.PathParts)
+    {
+      if (i + 1 == _item.PathParts.Size() && !_item.IsDir)
+        break;
+      NName::NormalizeDirPathPrefix(path);
+      path = MakePath_from_2_Parts(path, us2fs(_item.PathParts[i]));
+      NFind::CFileInfo info;
+      if (info.Find(path) && info.IsOsSymLink())
+      {
+        RINOK(SendMessageError("Cannot extract through a directory link", path))
+        return E_FAIL;
+      }
+    }
+  }
   
   if (!isAnti)
   {

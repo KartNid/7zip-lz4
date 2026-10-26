@@ -76,12 +76,15 @@ def main():
         check('flat.zip', zip_data({'a.txt': b'a', 'b.txt': b'b'}),
               {'flat/a.txt': b'a', 'flat/b.txt': b'b'})
         archive, output = check('single.zip', zip_data({'a.txt': b'a'}), {'single/a.txt': b'a'})
-        # Repeat without touching existing output; also account for a colliding file.
+        # Repeat into the same ordinary folder, preserving unrelated files.
+        (output / 'single/a.txt').write_bytes(b'old')
+        (output / 'single/keep.txt').write_bytes(b'keep')
         (output / 'single (2)').write_bytes(b'keep')
         run(['x', '-smart', archive, '-o' + str(output), '-y'])
         assert (output / 'single/a.txt').read_bytes() == b'a'
         assert (output / 'single (2)').read_bytes() == b'keep'
-        assert (output / 'single (3)/a.txt').read_bytes() == b'a'
+        assert (output / 'single/keep.txt').read_bytes() == b'keep'
+        assert not (output / 'single (3)').exists()
         check('implicit.zip', zip_data({'photos/a.txt': b'a', 'photos/sub/b.txt': b'b'}),
               {'photos/a.txt': b'a', 'photos/sub/b.txt': b'b'})
         check('explicit.zip', zip_data({'photos/': b'', 'photos/a.txt': b'a'}), {'photos/a.txt': b'a'})
@@ -118,7 +121,7 @@ def main():
         check('plain.txt.gz', gzip.compress(b'plain text'), {'plain.txt/plain.txt': b'plain text'})
         check('nested.zip', zip_data({'payload.tar': tar_data({'a.txt': b'a'})}),
               {'nested/payload.tar': tar_data({'a.txt': b'a'})})
-        # A pre-existing root tree is left intact, including nested symlinks.
+        # A pre-existing common root is merged, without an extra container.
         case = root / 'existing-root'
         case.mkdir()
         (case / 'photos').mkdir()
@@ -126,7 +129,7 @@ def main():
         existing = root / 'existing.zip'
         existing.write_bytes(zip_data({'photos/a.txt': b'a'}))
         run(['x', '-smart', existing, '-o' + str(case), '-y'])
-        assert files(case) == {'photos/keep.txt': b'keep', 'existing/photos/a.txt': b'a'}
+        assert files(case) == {'photos/keep.txt': b'keep', 'photos/a.txt': b'a'}
         if os.name != 'nt':
             output = root / 'link-output'
             output.mkdir()
@@ -136,6 +139,51 @@ def main():
             run(['x', '-smart', existing, '-o' + str(output), '-y'])
             assert not list(outside.iterdir()), 'Followed a pre-existing output symlink'
             assert (output / 'existing/photos/a.txt').read_bytes() == b'a'
+            (case / 'photos/sub').symlink_to(outside, target_is_directory=True)
+            existing.write_bytes(zip_data({'photos/sub/a.txt': b'a'}))
+            run(['x', '-smart', existing, '-o' + str(case), '-y'], success=False)
+            assert not list(outside.iterdir()), 'Followed a nested directory link in a reused tree'
+
+        # Every conflict policy works inside both reused layouts and decoded TARs.
+        merge_checks = 0
+        names = ['app.info', '读我.txt', 'no-extension', '.hidden']
+        for common_root in (False, True):
+            for extension, encode in [('zip', zip_data),
+                                      ('tar.gz', lambda e: gzip.compress(tar_data(e))),
+                                      ('tar.lz4', lambda e: lz4.frame.compress(tar_data(e)))]:
+                for mode in ('-aos', '-aoa', '-aou'):
+                    case = root / ('merge-' + str(merge_checks))
+                    case.mkdir()
+                    parent = case / 'output'
+                    dest = parent / ('photos' if common_root else 'bundle')
+                    dest.mkdir(parents=True)
+                    for name in names:
+                        (dest / name).write_bytes(b'old')
+                    (dest / 'app (2).info').write_bytes(b'keep2')
+                    (dest / 'app (4).info').write_bytes(b'keep4')
+                    (dest / 'keep.txt').write_bytes(b'keep')
+                    entries = {(('photos/' if common_root else '') + n): b'new' for n in names}
+                    entries[('photos/' if common_root else '') + 'fresh.txt'] = b'fresh'
+                    archive2 = case / ('bundle.' + extension)
+                    archive2.write_bytes(encode(entries))
+                    run(['x', '-smart', archive2, '-o' + str(parent), mode])
+                    expected = {n: b'new' if mode == '-aoa' else b'old' for n in names}
+                    expected.update({'app (2).info': b'keep2', 'app (4).info': b'keep4',
+                                     'keep.txt': b'keep', 'fresh.txt': b'fresh'})
+                    if mode == '-aou':
+                        expected.update({'app (3).info': b'new', '读我 (2).txt': b'new',
+                                         'no-extension (2)': b'new', '.hidden (2)': b'new'})
+                    assert files(dest) == expected, (common_root, extension, mode, files(dest))
+                    assert list(parent.iterdir()) == [dest], 'Created a numbered directory instead of merging'
+                    merge_checks += 1
+        # A same-name file cannot be reused as a directory; choose a new container.
+        output = root / 'file-collision'
+        output.mkdir()
+        (output / 'single').write_bytes(b'keep')
+        (output / 'single (2)').write_bytes(b'keep2')
+        run(['x', '-smart', archive, '-o' + str(output), '-y'])
+        assert files(output) == {'single': b'keep', 'single (2)': b'keep2', 'single (3)/a.txt': b'a'}
+        print(f'PASS {merge_checks} merge/conflict policy cases and file/link isolation', flush=True)
         # A skippable frame before TAR data must also be transparent in smart mode.
         import struct
         frame = lz4.frame.compress(tar_data({'a.txt': b'a'}))

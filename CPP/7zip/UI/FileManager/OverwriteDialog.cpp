@@ -11,6 +11,8 @@
 
 #include "../../../Windows/Control/Static.h"
 
+#include "../../Common/FilePathAutoRename.h"
+
 #include "FormatUtils.h"
 #include "LangUtils.h"
 #include "OverwriteDialog.h"
@@ -94,6 +96,22 @@ void COverwriteDialog::SetFileInfoControl(
     unsigned iconID_2)
 {
   {
+    if (SmartMode)
+    {
+      UString s;
+      if (fileInfo.Size_IsDefined)
+        AddSizeValue(s, fileInfo.Size);
+      s.Add_LF();
+      s.Add_LF();
+      if (fileInfo.Time_IsDefined)
+      {
+        char t[64];
+        ConvertUtcFileTimeToString(fileInfo.Time, t);
+        s += t;
+      }
+      SetItemText(textID, s);
+      return;
+    }
     const UString &path = fileInfo.Path;
     const int slashPos = path.ReverseFind_PathSepar();
     UString s = path.Left((unsigned)(slashPos + 1));
@@ -231,6 +249,30 @@ void COverwriteDialog::SetFileInfoControl(
 
 bool COverwriteDialog::OnInit()
 {
+  if (SmartMode)
+  {
+    #ifdef Z7_LANG
+    static const UInt32 ids[] = { IDT_SMART_HEADER, IDG_SMART_OLD,
+        IDG_SMART_NEW, IDT_SMART_OPTIONS, IDR_SMART_SKIP,
+        IDR_SMART_OVERWRITE, IDR_SMART_RENAME, IDC_SMART_ALL };
+    LangSetWindowText(*this, IDD_SMART_OVERWRITE);
+    LangSetDlgItems(*this, ids, Z7_ARRAY_SIZE(ids));
+    #endif
+    SetItemText(IDT_SMART_PATH, OldFileInfo.Path);
+    SetFileInfoControl(OldFileInfo, IDT_OVERWRITE_OLD_FILE_SIZE_TIME, 0, 0);
+    SetFileInfoControl(NewFileInfo, IDT_OVERWRITE_NEW_FILE_SIZE_TIME, 0, 0);
+    FString renamed = us2fs(OldFileInfo.Path);
+    if (AutoRenamePathSmart(renamed))
+    {
+      const UString name = fs2us(renamed.Ptr((unsigned)(renamed.ReverseFind_PathSepar() + 1)));
+      SetItemText(IDR_SMART_RENAME, MyFormatNew(IDR_SMART_RENAME, name));
+    }
+    else
+      EnableItem(IDR_SMART_RENAME, false);
+    CheckButton(DefaultButton_is_NO ? IDR_SMART_SKIP : IDR_SMART_OVERWRITE, true);
+    NormalizePosition();
+    return CModalDialog::OnInit();
+  }
   #ifdef Z7_LANG
   LangSetWindowText(*this, IDD_OVERWRITE);
   LangSetDlgItems(*this, kLangIDs, Z7_ARRAY_SIZE(kLangIDs));
@@ -265,6 +307,8 @@ bool COverwriteDialog::OnInit()
 
 bool COverwriteDialog::OnDestroy()
 {
+  if (SmartMode)
+    return false;
   SetItemIcon(IDI_OVERWRITE_OLD_FILE, NULL);
   SetItemIcon(IDI_OVERWRITE_OLD_FILE_2, NULL);
   SetItemIcon(IDI_OVERWRITE_NEW_FILE, NULL);
@@ -274,6 +318,17 @@ bool COverwriteDialog::OnDestroy()
 
 bool COverwriteDialog::OnButtonClicked(unsigned buttonID, HWND buttonHWND)
 {
+  if (SmartMode && buttonID == IDOK)
+  {
+    const bool all = IsButtonCheckedBool(IDC_SMART_ALL);
+    if (IsButtonCheckedBool(IDR_SMART_SKIP))
+      End(all ? IDB_NO_TO_ALL : IDNO);
+    else if (IsButtonCheckedBool(IDR_SMART_RENAME))
+      End(all ? IDB_AUTO_RENAME : IDR_SMART_RENAME);
+    else
+      End(all ? IDB_YES_TO_ALL : IDYES);
+    return true;
+  }
   switch (buttonID)
   {
     case IDYES:

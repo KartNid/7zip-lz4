@@ -261,6 +261,7 @@ private:
 public:
   bool YesToAll;
   bool TestMode;
+  bool SmartExtract;
 
   UInt32 NumArchiveErrors;
   NExtract::NOverwriteMode::EEnum OverwriteMode;
@@ -314,6 +315,7 @@ public:
 #endif
     , YesToAll(false)
     , TestMode(false)
+    , SmartExtract(false)
     , OverwriteMode(NExtract::NOverwriteMode::kAsk)
 #ifndef Z7_SFX
     , _hashCalc(NULL)

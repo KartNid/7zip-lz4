@@ -99,6 +99,9 @@ foreach ($format in @('gzip', 'lz4')) {
     & (Join-Path $InstallDir '7zz.exe') a "-t$format" $compressed $tar -y | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'Cannot compress TAR for smart menu test' }
     Remove-Item $tar
+    $mergeDir = Join-Path $TestDir $name
+    New-Item -ItemType Directory -Force $mergeDir | Out-Null
+    [IO.File]::WriteAllText((Join-Path $mergeDir 'keep.txt'), 'existing content')
     [ShellSmoke]::Invoke($compressed, 'SevenZipSmartExtract')
     $smartOutput = Join-Path $TestDir "$name/payload.bin"
     $deadline = (Get-Date).AddSeconds(30)
@@ -106,6 +109,8 @@ foreach ($format in @('gzip', 'lz4')) {
     if (-not (Test-Path $smartOutput)) { throw "Smart menu did not unpack both $format/TAR layers" }
     if ((Get-FileHash $inputFile).Hash -ne (Get-FileHash $smartOutput).Hash) { throw 'Smart menu output mismatch' }
     if (Test-Path $tar) { throw 'Smart extraction left an intermediate TAR' }
+    if ([IO.File]::ReadAllText((Join-Path $mergeDir 'keep.txt')) -ne 'existing content') { throw 'Smart menu did not preserve unrelated files in reused folder' }
+    if (Test-Path ($mergeDir + ' (2)')) { throw 'Smart menu numbered an ordinary existing folder' }
     Write-Output "PASS native smart menu: $format/TAR, archive-name folder, exact content, no intermediate TAR"
 }
 
@@ -132,3 +137,5 @@ try {
     # Delete only the junction, never recurse into its target.
     [IO.Directory]::Delete($junction)
 }
+
+& "$PSScriptRoot/windows_smart_conflicts.ps1" -InstallDir $InstallDir -TestDir (Join-Path $TestDir 'smart-conflicts')

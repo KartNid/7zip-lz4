@@ -17,3 +17,14 @@
 #define IDI_OVERWRITE_NEW_FILE             110
 #define IDI_OVERWRITE_NEW_FILE_2           111
 #define IDT_OVERWRITE_NEW_FILE_SIZE_TIME   112
+
+#define IDD_SMART_OVERWRITE       3520
+#define IDT_SMART_HEADER          3521
+#define IDG_SMART_OLD             3522
+#define IDG_SMART_NEW             3523
+#define IDT_SMART_OPTIONS         3524
+#define IDR_SMART_SKIP            3525
+#define IDR_SMART_OVERWRITE       3526
+#define IDR_SMART_RENAME          3527
+#define IDC_SMART_ALL             3528
+#define IDT_SMART_PATH            3529

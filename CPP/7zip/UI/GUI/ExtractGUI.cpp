@@ -278,6 +278,7 @@ HRESULT ExtractGUI(
   extracter.ExtractCallbackSpec->ProgressDialog = &extracter;
   extracter.FolderArchiveExtractCallback = extractCallback;
   extracter.ExtractCallbackSpec->Init();
+  extractCallback->SmartExtract = options.SmartExtract;
 
   extracter.CompressingMode = false;
 

@@ -71,13 +71,16 @@ class COverwriteDialog: public NWindows::NControl::CModalDialog
 public:
   bool ShowExtraButtons;
   bool DefaultButton_is_NO;
+  bool SmartMode;
   NOverwriteDialog::CFileInfo OldFileInfo;
   NOverwriteDialog::CFileInfo NewFileInfo;
 
-  COverwriteDialog(): ShowExtraButtons(true), DefaultButton_is_NO(false) {}
+  COverwriteDialog(): ShowExtraButtons(true), DefaultButton_is_NO(false), SmartMode(false) {}
 
   INT_PTR Create(HWND parent = NULL)
   {
+    if (SmartMode)
+      return CModalDialog::Create(IDD_SMART_OVERWRITE, parent);
 #ifdef UNDER_CE
     BIG_DIALOG_SIZE(280, 200);
     _isBig = isBig;

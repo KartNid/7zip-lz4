@@ -492,6 +492,7 @@ public:
   UInt64 AltStreams_UnpackSize;
   
   FString DirPathPrefix_for_HashFiles;
+  bool SmartExtract;
 
   CArchiveExtractCallback();
 
