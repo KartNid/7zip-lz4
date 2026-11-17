@@ -3,7 +3,7 @@
 
 ## 7-Zip LZ4（KartNid 构建）
 
-支持标准 `.lz4` 文件与 `.7z` 中的 LZ4 压缩方法，基于官方 7-Zip 26.05。
+支持标准 `.lz4` 文件与 `.7z` 中的 LZ4 压缩方法，基于官方 7-Zip 26.06。
 
 - [下载最新版本](https://github.com/KartNid/7zip-lz4/releases/latest)：Windows x64 安装版、便携版和 Linux x64 命令行版。
 - Windows 安装版和便携版包含官方全部 93 个语言资源，支持简体中文、繁体中文等；在 **工具 → 选项 → 语言** 中切换。
@@ -12,6 +12,7 @@
 - 新增 **智能解压至此**：按包内目录结构选择目标文件夹，自动解开压缩流和 TAR 两层；[使用说明](docs/smart-extract.md)。
 - 智能解压复用已有同名文件夹；文件重名时可跳过、覆盖或重命名，并可应用到全部文件。
 - [安装、升级与构建说明](docs/windows-install.md) · [更新日志](CHANGELOG.txt)
+- 已合并上游 26.06 的分卷支持改进及错误、漏洞修复；[合并检查记录](docs/upstream-26.06.md)。
 
 ```console
 7zz a -tlz4 output.lz4 input

@@ -1,3 +1,9 @@
+26.06.1 / v26.06-lz4.1
+- Merge official 7-Zip 26.06, commit d3296e39e1f1f92c7b41c0c3848e65640428d42d.
+- Include upstream Linux split naming improvements, decoder fixes, and vulnerability fixes.
+- Preserve LZ4, smart extraction, existing-folder merging, duplicate-file choices, and multilingual installation.
+- Add independent split, CAB/MSZIP, SZDD, and archive-update regression checks on Windows and Linux.
+
 26.05.4 / v26.05-lz4.4
 - Merge smart extraction into existing common-root and archive-name directories.
 - Add a Windows duplicate-file dialog with skip, overwrite, rename, and apply-to-all choices.
